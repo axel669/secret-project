@@ -1,0 +1,9 @@
+compiler:
+    version: false
+    # zip: [
+    #     'app.js'
+    # ]
+    # copy:
+    #     files: ['app.zip', 'version.json']
+    #     dest:
+    #         absolute: "C:\\inetpub\\wwwroot"
