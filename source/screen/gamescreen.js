@@ -54,9 +54,9 @@ class CDCard extends React.Component {
         if (this.props.movable === true) {
             this.answerToken = PubSub.subscribe(
                 "campdisco.game.forceAnswer",
-                (t, send) => {
+                (t, data) => {
                     // console.log(t, send);
-                    this.finish(null, send);
+                    this.finish(data);
                 }
             );
         } else {
@@ -79,7 +79,7 @@ class CDCard extends React.Component {
                     if (fill === 60) {
                         PubSub.unsubscribe(this.fillToken);
                         this.fillToken = null;
-                        PubSub.publish("campdisco.game.forceAnswer", null);
+                        PubSub.publish("campdisco.game.forceAnswer", [null, null]);
                     }
                 }
             );
@@ -128,7 +128,7 @@ class CDCard extends React.Component {
 
         this.setState({x, y});
     }
-    finish = (evt, forced = null) => {
+    finish = ([evt, forced = null]) => {
         if (this.state.active === false && forced === null) {
             return;
         }
@@ -170,7 +170,7 @@ class CDCard extends React.Component {
         );
         // console.log('done!');
     }
-    touchEnd = (evt) => this.finish(evt)
+    touchEnd = (evt) => PubSub.publishSync("campdisco.game.forceAnswer", [evt, null])
 
     componentDidUpdate = () => {
         if (this.props.movable === false || this.state.animating === true) {
@@ -239,6 +239,29 @@ class CDCard extends React.Component {
     }
 }
 
+const correct = [
+    "amazeen.mp3",
+    "awesome.mp3",
+    "excellent.mp3",
+    "fantastic.mp3",
+    "files.txt",
+    "Good Job.mp3",
+    "Good Work.mp3",
+    "Great.mp3",
+    "perfect.mp3",
+    "Way to Go.mp3",
+    "wonderful.mp3",
+    "Woohoo.mp3",
+    "Yippee.mp3",
+    "You Did It.mp3"
+];
+const wrong = [
+    "no.mp3",
+    "nope.mp3",
+    "Not quite.mp3",
+    "Thats Not it.mp3",
+    "Try Again.mp3"
+];
 class GameScreen extends Subscribable {
     static get startingPos() {
         return [
@@ -251,8 +274,8 @@ class GameScreen extends Subscribable {
 
     constructor(props) {
         super(props);
-        const url = "https://res.cloudinary.com/dsjiwbe0q/image/upload/v1466295085/f7e57b7ccc7fcb3297c45d6a1af9787b_sh2spa.png";
-        // const url = "https://res.cloudinary.com/dsjiwbe0q/image/upload/v1466365486/8bit_mega_man_1_20276_6496_thumb_9812_xpu8wi.png";
+        // const url = "https://res.cloudinary.com/dsjiwbe0q/image/upload/v1466295085/f7e57b7ccc7fcb3297c45d6a1af9787b_sh2spa.png";
+        const url = "https://res.cloudinary.com/dsjiwbe0q/image/upload/v1466365486/8bit_mega_man_1_20276_6496_thumb_9812_xpu8wi.png";
         this.index = -1;
         this.state = {
             paused: false,
@@ -279,12 +302,15 @@ class GameScreen extends Subscribable {
         this.pubListen(
             'campdisco.game.answer',
             async (evt, answer) => {
-                console.log(answer);
+                // console.log(answer);
+                this.setState({scale: 0});
+                await chrono.wait(310);
                 if (answer === true) {
-                    this.setState({scale: 0});
-                    await chrono.wait(600);
-                    PubSub.publish("campdisco.game.nextgame", null);
+                    const caudio = correct[Math.floor(Math.random() * correct.length)];
+                    new Howl({urls: [`audio/correct/${caudio}`], onend: () => PubSub.publish('campdisco.response.finished')}).play();
                 } else {
+                    new Howl({urls: [`audio/wrong/${wrong[Math.floor(Math.random() * wrong.length)]}`], onend: () => PubSub.publish('campdisco.response.finished')}).play();
+                    // nope.play();
                     // this.refs.timer.reset();
                 }
             }
@@ -311,7 +337,7 @@ class GameScreen extends Subscribable {
                     <UI.IconButton pinInfo={{bottom: 5, left: 5, width: 40, height: 40}} icon="ion-pause" flush fill cornerRadius={20} raised iconSize={20} onTap={() => this.setState({paused: true})} />
                     <Timer pinInfo={{bottom: 5, right: 5, zIndex: '+100'}} ref="timer" />
                 </UI.Pinboard>
-                <div style={{transition: 'transform 500ms ease-in', transform: `scale(${scale}, ${scale})`, position: 'absolute', width: '100%', height: '100%', top: 0}}>
+                <div style={{transition: 'transform 300ms ease-in', transform: `scale(${scale}, ${scale})`, position: 'absolute', width: '100%', height: '100%', top: 0}}>
                     {choices}
                     {movable}
                 </div>
@@ -340,22 +366,28 @@ class Timer extends Subscribable {
         this.max = Settings.read("timerDuration");
         this.left = this.max;
         this.pubListen(
+            'campdisco.game.forceAnswer',
+            () => {
+                this.clearSubs();
+            }
+        )
+        this.pubListen(
             "system.framedraw",
             (t, time) => {
                 this.left -= time;
                 // console.log(this.left);
                 if (this.left <= 0) {
+                    this.left = 0;
                     this.clearSubs();
-                    PubSub.publish("campdisco.game.forceAnswer", false);
-                } else {
-                    this.forceUpdate();
+                    PubSub.publish("campdisco.game.forceAnswer", [null, false]);
                 }
+                this.forceUpdate();
             }
         );
     }
 
     render = () => {
-        const s = 60;
+        const s = 50;
         return (
             <svg width={s} height={s}>
                 <Arc cx={s / 2} cy={s / 2} radius={s / 2 - 3} start={0} end={360 * (this.left / this.max)} />
@@ -372,10 +404,11 @@ class RealScreen extends Subscribable {
 
     componentDidMount = () => {
         // this.token = PubSub.subscribe(
-        window.nope = new Howl({urls: ['audio/Not quite.mp3'], onend: () => PubSub.publish('campdisco.response.finished')});
+        // window.nope = new Howl({urls: ['audio/Not quite.mp3'], onend: () => PubSub.publish('campdisco.response.finished')});
         this.pubListen(
-            "campdisco.game.nextgame",
+            "campdisco.response.finished",
             () => {
+                // console.log(prevAnswer);
                 if (GameState.currentLevel.finished === true) {
                     App.navigation.replace("/");
                 } else {

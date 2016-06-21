@@ -12,6 +12,7 @@ if (Settings.has("version") === false) {
     Settings.write("version", 0);
     Settings.write("timerDuration", 5000);
 }
+Settings.write("timerDuration", 4000);
 
 App.start(
     <Route>
