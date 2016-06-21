@@ -1,7 +1,6 @@
-export default class Subscribable extends React.Component {
-    constructror(props) {
-        super(props);
-        console.log('work?');
+class Subscribable extends React.Component {
+    constructor() {
+        super();
         this.__tokens = [];
     }
 
@@ -12,5 +11,12 @@ export default class Subscribable extends React.Component {
         for (const token of this.__tokens) {
             PubSub.unsubscribe(token);
         }
+        this.__tokens = [];
+    }
+
+    componentWillUnmount = () => {
+        this.clearSubs();
     }
 }
+
+export default Subscribable;

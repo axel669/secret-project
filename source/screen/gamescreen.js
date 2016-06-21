@@ -1,6 +1,7 @@
 import GameState from 'gamestate';
 import Container from 'component/container';
 import Subscribable from 'component/subscribable';
+import {Settings} from 'settings';
 
 const animationTime = 250;
 
@@ -11,7 +12,11 @@ Style.create(
             position: 'absolute',
             transform: 'translate3d(-50%, -50%, 0)',
             backgroundColor: 'white',
+            borderWidth: 3,
+            borderStyle: 'solid',
+            borderColor: 'transparent',
             boxShadow: '1px 1px 1px rgba(0, 0, 0, 0.35)',
+            borderRadius: 5,
             ": before": {
                 content: '""',
                 display: 'block',
@@ -23,7 +28,8 @@ Style.create(
             top: 0,
             left: 0,
             right: 0,
-            bottom: 0
+            bottom: 0,
+            padding: 2
         }
     }
 );
@@ -46,7 +52,13 @@ class CDCard extends React.Component {
         this.touchID = null;
         this.fillToken = null;
         if (this.props.movable === true) {
-            this.answerToken = PubSub.subscribe("campdisco.game.filled", () => this.finish(null));
+            this.answerToken = PubSub.subscribe(
+                "campdisco.game.forceAnswer",
+                (t, send) => {
+                    // console.log(t, send);
+                    this.finish(null, send);
+                }
+            );
         } else {
             this.answerToken = null;
         }
@@ -67,7 +79,7 @@ class CDCard extends React.Component {
                     if (fill === 60) {
                         PubSub.unsubscribe(this.fillToken);
                         this.fillToken = null;
-                        PubSub.publish("campdisco.game.filled", null);
+                        PubSub.publish("campdisco.game.forceAnswer", null);
                     }
                 }
             );
@@ -116,8 +128,8 @@ class CDCard extends React.Component {
 
         this.setState({x, y});
     }
-    finish = (evt) => {
-        if (this.state.active === false) {
+    finish = (evt, forced = null) => {
+        if (this.state.active === false && forced === null) {
             return;
         }
         if (evt !== null) {
@@ -132,6 +144,9 @@ class CDCard extends React.Component {
 
         if (this.prevCount === 1) {
             answer = this.props.others[this.prevCollision.indexOf(true)].props.correct;
+        }
+        if (forced !== null) {
+            answer = forced;
         }
 
         PubSub.publish("campdisco.game.answer", answer);
@@ -155,6 +170,7 @@ class CDCard extends React.Component {
         );
         // console.log('done!');
     }
+    touchEnd = (evt) => this.finish(evt)
 
     componentDidUpdate = () => {
         if (this.props.movable === false || this.state.animating === true) {
@@ -196,7 +212,6 @@ class CDCard extends React.Component {
             width: `${width * size}vh`,
             top: `${y}%`,
             left: `${x}%`,
-            border: '1px solid #DDD',
             transition: animating === true ? `top ${animationTime}ms linear, left ${animationTime}ms linear, width ${animationTime}ms linear` : null,
             zIndex: top === true ? '+100' : null
         };
@@ -204,13 +219,13 @@ class CDCard extends React.Component {
             {
                 onTouchStart: this.setupMove,
                 onTouchMove: this.onTouchMove,
-                onTouchEnd: this.finish,
-                onTouchCancel: this.finish
+                onTouchEnd: this.touchEnd,
+                onTouchCancel: this.touchEnd
             } :
             {};
 
         if (this.state.selected === true) {
-            cardStyle.border = '3px solid cyan';
+            cardStyle.borderColor = 'cyan';
         }
 
         return (
@@ -224,7 +239,7 @@ class CDCard extends React.Component {
     }
 }
 
-class GameScreen extends React.Component {
+class GameScreen extends Subscribable {
     static get startingPos() {
         return [
             {x0: 20, y0: 25, correct: false, size: 1},
@@ -236,8 +251,8 @@ class GameScreen extends React.Component {
 
     constructor(props) {
         super(props);
-        // const url = "https://res.cloudinary.com/dsjiwbe0q/image/upload/v1466295085/f7e57b7ccc7fcb3297c45d6a1af9787b_sh2spa.png";
-        const url = "https://res.cloudinary.com/dsjiwbe0q/image/upload/v1466365486/8bit_mega_man_1_20276_6496_thumb_9812_xpu8wi.png";
+        const url = "https://res.cloudinary.com/dsjiwbe0q/image/upload/v1466295085/f7e57b7ccc7fcb3297c45d6a1af9787b_sh2spa.png";
+        // const url = "https://res.cloudinary.com/dsjiwbe0q/image/upload/v1466365486/8bit_mega_man_1_20276_6496_thumb_9812_xpu8wi.png";
         this.index = -1;
         this.state = {
             paused: false,
@@ -258,9 +273,10 @@ class GameScreen extends React.Component {
     }
 
     componentDidMount = () => {
-        const allThings = Object.values(this.refs);
+        const allThings = Object.keys(this.refs).filter(key => key.startsWith('target')).map(key => this.refs[key]);
         this.movable = <CDCard width={30} size={1} x0={50} y0={75} size={1.3} others={allThings} movable />;
-        this.token = PubSub.subscribe(
+        // this.token = PubSub.subscribe(
+        this.pubListen(
             'campdisco.game.answer',
             async (evt, answer) => {
                 console.log(answer);
@@ -268,15 +284,21 @@ class GameScreen extends React.Component {
                     this.setState({scale: 0});
                     await chrono.wait(600);
                     PubSub.publish("campdisco.game.nextgame", null);
+                } else {
+                    // this.refs.timer.reset();
                 }
             }
+        );
+        this.pubListen(
+            'campdisco.response.finished',
+            () => this.refs.timer.reset()
         );
 
         this.forceUpdate();
     }
-    componentWillUnmount = () => {
-        PubSub.unsubscribe(this.token);
-    }
+    // componentWillUnmount = () => {
+    //     PubSub.unsubscribe(this.token);
+    // }
 
     render = () => {
         const {scale} = this.state;
@@ -286,8 +308,8 @@ class GameScreen extends React.Component {
             <Container fill style={{backgroundColor: 'cyan'}}>
                 <UI.Pinboard width="100%" height="100%">
                     <div style={{backgroundColor: 'rgba(0, 0, 0, 0.35)', width: '100%', height: '100%', display: this.state.paused === true ? '' : 'none', zIndex: '+1000', position: 'absolute'}} pinInfo={{width: '100%', height: '100%'}} />
-                    {/*<div style={{backgroundColor: 'cyan', width: '100%', height: '100%'}} pinInfo={{width: '100%', height: '100%'}} />*/}
                     <UI.IconButton pinInfo={{bottom: 5, left: 5, width: 40, height: 40}} icon="ion-pause" flush fill cornerRadius={20} raised iconSize={20} onTap={() => this.setState({paused: true})} />
+                    <Timer pinInfo={{bottom: 5, right: 5, zIndex: '+100'}} ref="timer" />
                 </UI.Pinboard>
                 <div style={{transition: 'transform 500ms ease-in', transform: `scale(${scale}, ${scale})`, position: 'absolute', width: '100%', height: '100%', top: 0}}>
                     {choices}
@@ -298,14 +320,60 @@ class GameScreen extends React.Component {
     }
 }
 
-class RealScreen extends React.Component {
+const Arc = ({cx, cy, radius, start, end}) => {
+    const circ = Math.PI * 2 * radius;
+    const first = start / 360;
+    const second = end / 360 - first;
+
+    return <circle cx={cx} cy={cy} r={radius} strokeWidth={3} strokeDasharray={`0 ${first * circ} ${second * circ} ${circ}`} stroke="black" fill="transparent" transform={`rotate(-90 ${cx} ${cy})`} />;
+};
+class Timer extends Subscribable {
     constructor(props) {
         super(props);
-        this.state = {current: Date.now()};
     }
 
     componentDidMount = () => {
-        PubSub.subscribe(
+        this.reset();
+    }
+
+    reset = () => {
+        this.max = Settings.read("timerDuration");
+        this.left = this.max;
+        this.pubListen(
+            "system.framedraw",
+            (t, time) => {
+                this.left -= time;
+                // console.log(this.left);
+                if (this.left <= 0) {
+                    this.clearSubs();
+                    PubSub.publish("campdisco.game.forceAnswer", false);
+                } else {
+                    this.forceUpdate();
+                }
+            }
+        );
+    }
+
+    render = () => {
+        const s = 60;
+        return (
+            <svg width={s} height={s}>
+                <Arc cx={s / 2} cy={s / 2} radius={s / 2 - 3} start={0} end={360 * (this.left / this.max)} />
+            </svg>
+        );
+    }
+}
+
+class RealScreen extends Subscribable {
+    constructor() {
+        super();
+        this.state = {current: null};
+    }
+
+    componentDidMount = () => {
+        // this.token = PubSub.subscribe(
+        window.nope = new Howl({urls: ['audio/Not quite.mp3'], onend: () => PubSub.publish('campdisco.response.finished')});
+        this.pubListen(
             "campdisco.game.nextgame",
             () => {
                 if (GameState.currentLevel.finished === true) {
@@ -317,7 +385,11 @@ class RealScreen extends React.Component {
                 }
             }
         );
+        GameState.initLevel();
     }
+    // componentWillUnmount = () => {
+    //     PubSub.unsubscribe(this.token);
+    // }
 
     render = () => {
         const {current} = this.state;
