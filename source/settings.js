@@ -1,4 +1,4 @@
-const appKey = "CHANGE_THIS";
+const appKey = "campdisco";
 
 export default {
     Session: App.createSession(appKey),

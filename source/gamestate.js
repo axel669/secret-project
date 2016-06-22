@@ -1,3 +1,5 @@
+import BasicLevel from 'levels/basiclevel';
+
 let currentState;
 let currentLevel;
 
@@ -7,7 +9,7 @@ currentState = {
     }
 };
 
-PubSub.subscribe("campdisco.game.answer", (t, answer) => currentLevel.processAnswer(answer));
+// PubSub.subscribe("campdisco.game.answer", (t, answer) => currentLevel.processAnswer(answer));
 
 export default {
     get current() {
@@ -17,17 +19,18 @@ export default {
         return currentLevel;
     },
     initLevel() {
-        let level = 1;
-        currentLevel = {
-            processAnswer(answer) {
-                if (answer === true) {
-                    level += 1;
-                }
-            },
-            get finished() {
-                return level >= 4;
-            }
-        };
+        // let level = 1;
+        // currentLevel = {
+        //     processAnswer(answer) {
+        //         if (answer === true) {
+        //             level += 1;
+        //         }
+        //     },
+        //     get finished() {
+        //         return level >= 4;
+        //     }
+        // };
+        currentLevel = new BasicLevel();
 
         PubSub.publish("campdisco.game.nextgame", null);
     }
